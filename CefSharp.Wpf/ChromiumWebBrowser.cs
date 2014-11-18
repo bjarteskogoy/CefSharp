@@ -1102,7 +1102,14 @@ namespace CefSharp.Wpf
         {
             UiThreadRunAsync(() =>
             {
-                ZoomLevel = 0;
+                if (AutoZoom)
+                {
+                    DoAutoZoom();
+                }
+                else
+                {
+                    ZoomLevel = 0;
+                }
             });
         }
 
