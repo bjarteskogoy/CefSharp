@@ -4,8 +4,10 @@
 
 namespace CefSharp
 {
-    public interface IMenuHandler
+    public enum ResponseAction
     {
-        bool OnBeforeContextMenu(IWebBrowser browser, IContextMenuParams parameters);
+        Continue,
+        Cancel,
+        Redirect
     }
 }

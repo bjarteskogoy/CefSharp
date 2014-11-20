@@ -58,6 +58,11 @@ namespace CefSharp.Wpf
         public event EventHandler<FrameLoadEndEventArgs> FrameLoadEnd;
         public event EventHandler<LoadErrorEventArgs> LoadError;
 
+        /// <summary>
+        /// Raised before each render cycle, and allows you to adjust the bitmap before it's rendered/applied
+        /// </summary>
+        public event EventHandler<RenderingEventArgs> Rendering;
+
         public ICommand BackCommand { get; private set; }
         public ICommand ForwardCommand { get; private set; }
         public ICommand ReloadCommand { get; private set; }
@@ -231,15 +236,22 @@ namespace CefSharp.Wpf
 
         public static readonly DependencyProperty ZoomLevelProperty =
             DependencyProperty.Register("ZoomLevel", typeof(double), typeof(ChromiumWebBrowser),
-                                        new UIPropertyMetadata(0d, OnZoomLevelChanged));
+                                        new UIPropertyMetadata(0d, OnZoomLevelChanged, OnCoerceZoomLevel));
 
         private static void OnZoomLevelChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
         {
-            var owner = (ChromiumWebBrowser)sender;
-            var oldValue = (double)args.OldValue;
-            var newValue = (double)args.NewValue;
+            //Set the zoom level in OnCoerceZoomLevel
+            //Setting the value will only trigger OnZoomLevelChanged when the dependency property changes.
+            //This will prevent zoom level from being set by OnFrameLoadStart and when rendering happens on anohter 
+            //browser process than the one active when ZoomLevel was first set, ZoomLevel will not be appled
+        }
 
-            owner.OnZoomLevelChanged(oldValue, newValue);
+        private static object OnCoerceZoomLevel(DependencyObject sender, object baseValue)
+        {
+            var owner = (ChromiumWebBrowser)sender;
+            owner.OnZoomLevelChanged(owner.ZoomLevel, (double)baseValue);
+
+            return (double)baseValue;
         }
 
         protected virtual void OnZoomLevelChanged(double oldValue, double newValue)
@@ -253,6 +265,20 @@ namespace CefSharp.Wpf
         }
 
         #endregion ZoomLevel dependency property
+
+        #region AutoZoom dependency property
+
+        public bool AutoZoom
+        {
+            get { return (bool)GetValue(AutoZoomProperty); }
+            set { SetValue(AutoZoomProperty, value); }
+        }
+
+        public static readonly DependencyProperty AutoZoomProperty =
+            DependencyProperty.Register("AutoZoom", typeof (bool), typeof (ChromiumWebBrowser),
+                new UIPropertyMetadata(false));
+
+        #endregion
 
         #region ZoomLevelIncrement dependency property
 
@@ -456,6 +482,7 @@ namespace CefSharp.Wpf
             disposables.Add(managedCefBrowserAdapter);
             disposables.Add(new DisposableEventWrapper(this, ActualHeightProperty, OnActualSizeChanged));
             disposables.Add(new DisposableEventWrapper(this, ActualWidthProperty, OnActualSizeChanged));
+            
         }
 
         ~ChromiumWebBrowser()
@@ -465,12 +492,12 @@ namespace CefSharp.Wpf
 
         private void CreateOffscreenBrowserWhenActualSizeChanged()
         {
-            if (browserCreated)
+            if (browserCreated || System.ComponentModel.DesignerProperties.GetIsInDesignMode(this))
             {
                 return;
             }
 
-            managedCefBrowserAdapter.CreateOffscreenBrowser(BrowserSettings ?? new BrowserSettings());
+            managedCefBrowserAdapter.CreateOffscreenBrowser(BrowserSettings ?? new BrowserSettings(), Address);
             browserCreated = true;
         }
 
@@ -851,19 +878,16 @@ namespace CefSharp.Wpf
             // we have to handle these extra keys here. Hooking the Tab key like this makes the tab focusing in essence work like
             // KeyboardNavigation.TabNavigation="Cycle"; you will never be able to Tab out of the web browser control.
             var modifiers = GetModifiers(e);
+            var sendKey = KeysToSendtoBrowser.Contains(e.Key);
 
-            if (KeysToSendtoBrowser.Contains(e.Key) || modifiers > 0)
+            if (sendKey || modifiers > 0)
             {
                 var message = (int)(e.IsDown ? WM.KEYDOWN : WM.KEYUP);
                 var virtualKey = KeyInterop.VirtualKeyFromKey(e.Key);
 
                 managedCefBrowserAdapter.SendKeyEvent(message, virtualKey, modifiers);
 
-                if (KeysToSendtoBrowser.Contains(e.Key))
-                {
-                    e.Handled = true;
-                }
-
+                e.Handled = sendKey;
             }
         }
 
@@ -1088,8 +1112,31 @@ namespace CefSharp.Wpf
         {
             UiThreadRunAsync(() =>
             {
-                ZoomLevel = 0;
+                if (AutoZoom)
+                {
+                    DoAutoZoom();
+                }
+                else
+                {
+                    ZoomLevel = 0;
+                }
             });
+        }
+
+        private void DoAutoZoom()
+        {
+            UiThreadRunAsync(() =>
+            {
+                if (AutoZoom)
+                {
+                    ZoomLevel = CalculateZoomLevel(matrix.M11);
+                }
+            }, DispatcherPriority.Render);
+        }
+
+        public double CalculateZoomLevel(double scale)
+        {
+            return Math.Log(scale, 1.2);
         }
 
         public void ShowDevTools()
@@ -1104,6 +1151,8 @@ namespace CefSharp.Wpf
 
         void IWebBrowserInternal.OnFrameLoadStart(string url, bool isMainFrame)
         {
+            DoAutoZoom();
+
             var handler = FrameLoadStart;
             if (handler != null)
             {
@@ -1186,10 +1235,26 @@ namespace CefSharp.Wpf
             bitmapInfo.InteropBitmap = null;
         }
 
+        /// <summary>
+        /// Raises Rendering event
+        /// </summary>
+        protected virtual void OnRendering(object sender, RenderingEventArgs eventArgs)
+        {
+            var rendering = Rendering;
+            if (rendering != null)
+            {
+                rendering(this, eventArgs);
+            }
+        }
+
         void IRenderWebBrowser.SetBitmap(BitmapInfo bitmapInfo)
         {
             lock (bitmapInfo.BitmapLock)
             {
+                // Inform parents that the browser rendering is updating
+                OnRendering(this, new RenderingEventArgs(bitmapInfo));
+
+                // Now update the WPF image
                 if (bitmapInfo.IsPopup)
                 {
                     bitmapInfo.InteropBitmap = SetBitmapHelper(bitmapInfo,
@@ -1248,5 +1313,16 @@ namespace CefSharp.Wpf
             managedCefBrowserAdapter.GetText(taskStringVisitor);
             return taskStringVisitor.Task;
         }
+
+        public void ReplaceMisspelling(string word)
+        {
+            managedCefBrowserAdapter.ReplaceMisspelling(word);
+        }
+
+        public void AddWordToDictionary(string word)
+        {
+            managedCefBrowserAdapter.AddWordToDictionary(word);
+        }
+
     }
 }
