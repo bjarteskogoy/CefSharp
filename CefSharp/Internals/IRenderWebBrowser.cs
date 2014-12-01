@@ -3,6 +3,7 @@
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 using System;
+using System.Windows.Media.Imaging;
 
 namespace CefSharp.Internals
 {
@@ -12,6 +13,9 @@ namespace CefSharp.Internals
 
         int Width { get; }
         int Height { get; }
+
+        WriteableBitmap GetMainImage(int width, int height);
+        WriteableBitmap GetPopupImage(int width, int height);
 
         void InvokeRenderAsync(BitmapInfo bitmapInfo);
 

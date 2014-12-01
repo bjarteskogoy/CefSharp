@@ -14,6 +14,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace CefSharp.Wpf
@@ -1285,5 +1286,35 @@ namespace CefSharp.Wpf
             managedCefBrowserAdapter.AddWordToDictionary(word);
         }
 
+
+        static WriteableBitmap CreateBitmap(int width, int height)
+        {
+            return new WriteableBitmap(width, height, 96.0, 96.0, PixelFormats.Pbgra32, null);
+        }
+
+        static WriteableBitmap CheckSizeOrNull(WriteableBitmap bitmap, int width, int height)
+        {
+            if (bitmap == null)
+                return CreateBitmap(width, height);
+
+            if ((int)bitmap.Width != width || (int)bitmap.Height != height)
+                return CreateBitmap(width, height);
+
+            return bitmap;
+        }
+
+        private WriteableBitmap mainBitmap = null;
+        public WriteableBitmap GetMainImage(int width, int height)
+        {
+            mainBitmap = CheckSizeOrNull(mainBitmap, width, height);
+            return mainBitmap;
+        }
+
+        private WriteableBitmap popupBitmap = null;
+        public WriteableBitmap GetPopupImage(int width, int height)
+        {
+            popupBitmap = CheckSizeOrNull(popupBitmap, width, height);
+            return popupBitmap;
+        }
     }
 }

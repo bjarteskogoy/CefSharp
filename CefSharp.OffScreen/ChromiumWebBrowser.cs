@@ -500,5 +500,16 @@ namespace CefSharp.OffScreen
             TooltipText = tooltipText;
         }
         #endregion
+
+
+        public WriteableBitmap MainImage
+        {
+            get { throw new NotImplementedException(); }
+        }
+
+        public WriteableBitmap PopupImage
+        {
+            get { throw new NotImplementedException(); }
+        }
     }
 }

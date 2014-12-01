@@ -9,6 +9,7 @@
 
 using namespace msclr;
 using namespace System;
+using namespace System::Windows::Media::Imaging;
 
 namespace CefSharp
 {
@@ -88,11 +89,13 @@ namespace CefSharp
             {
                 if (type == PET_VIEW)
                 {
-                    SetBuffer(MainBitmapInfo, width, height, buffer);
+					UpdateWriteableBitmap(_renderWebBrowser->GetMainImage(width, height), dirtyRects, buffer, width, height);
+                    /*SetBuffer(MainBitmapInfo, width, height, buffer);*/
                 }
                 else if (type == PET_POPUP)
                 {
-                    SetBuffer(PopupBitmapInfo, width, height, buffer);
+					UpdateWriteableBitmap(_renderWebBrowser->GetPopupImage(width, height), dirtyRects, buffer, width, height);
+                    /*SetBuffer(PopupBitmapInfo, width, height, buffer);*/
                 }
             };
 
@@ -152,6 +155,12 @@ namespace CefSharp
             }
 
         private:
+
+			void UpdateWriteableBitmap(WriteableBitmap^ bitmap, const RectList& dirtyRects,
+				const void* buffer, int width, int height)
+			{
+				//TODO: Implement
+			}
 
             void SetBuffer(BitmapInfo^ bitmapInfo, int newWidth, int newHeight, const void* buffer)
             {
