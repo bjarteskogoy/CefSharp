@@ -1194,7 +1194,7 @@ namespace CefSharp.Wpf
 
         void IRenderWebBrowser.ClearBitmap(BitmapInfo bitmapInfo)
         {
-            bitmapInfo.InteropBitmap = null;
+            //bitmapInfo.InteropBitmap = null;
         }
 
         /// <summary>
@@ -1211,23 +1211,23 @@ namespace CefSharp.Wpf
 
         void IRenderWebBrowser.SetBitmap(BitmapInfo bitmapInfo)
         {
-            lock (bitmapInfo.BitmapLock)
-            {
-                // Inform parents that the browser rendering is updating
-                OnRendering(this, new RenderingEventArgs(bitmapInfo));
+            //lock (bitmapInfo.BitmapLock)
+            //{
+            //    // Inform parents that the browser rendering is updating
+            //    OnRendering(this, new RenderingEventArgs(bitmapInfo));
 
-                // Now update the WPF image
-                if (bitmapInfo.IsPopup)
-                {
-                    bitmapInfo.InteropBitmap = SetBitmapHelper(bitmapInfo,
-                        (InteropBitmap)bitmapInfo.InteropBitmap, bitmap => popupImage.Source = bitmap);
-                }
-                else
-                {
-                    bitmapInfo.InteropBitmap = SetBitmapHelper(bitmapInfo,
-                        (InteropBitmap)bitmapInfo.InteropBitmap, bitmap => image.Source = bitmap);
-                }
-            }
+            //    // Now update the WPF image
+            //    if (bitmapInfo.IsPopup)
+            //    {
+            //        bitmapInfo.InteropBitmap = SetBitmapHelper(bitmapInfo,
+            //            (InteropBitmap)bitmapInfo.InteropBitmap, bitmap => popupImage.Source = bitmap);
+            //    }
+            //    else
+            //    {
+            //        bitmapInfo.InteropBitmap = SetBitmapHelper(bitmapInfo,
+            //            (InteropBitmap)bitmapInfo.InteropBitmap, bitmap => image.Source = bitmap);
+            //    }
+            //}
         }
 
         private Point GetPixelPosition(MouseEventArgs e)
@@ -1289,16 +1289,27 @@ namespace CefSharp.Wpf
 
         static WriteableBitmap CreateBitmap(int width, int height)
         {
-            return new WriteableBitmap(width, height, 96.0, 96.0, PixelFormats.Pbgra32, null);
+            var temp = new WriteableBitmap(width, height, 96.0, 96.0, PixelFormats.Pbgra32, null);
+            RenderOptions.SetBitmapScalingMode(temp, BitmapScalingMode.NearestNeighbor);
+
+            return temp;
         }
 
-        static WriteableBitmap CheckSizeOrNull(WriteableBitmap bitmap, int width, int height)
+        static WriteableBitmap CheckSizeOrNull(WriteableBitmap bitmap, int width, int height, out bool createdNew)
         {
+            createdNew = false;
+
             if (bitmap == null)
+            {
+                createdNew = true;
                 return CreateBitmap(width, height);
+            }
 
             if ((int)bitmap.Width != width || (int)bitmap.Height != height)
+            {
+                createdNew = true;
                 return CreateBitmap(width, height);
+            }
 
             return bitmap;
         }
@@ -1306,14 +1317,28 @@ namespace CefSharp.Wpf
         private WriteableBitmap mainBitmap = null;
         public WriteableBitmap GetMainImage(int width, int height)
         {
-            mainBitmap = CheckSizeOrNull(mainBitmap, width, height);
+            bool newImage;
+            mainBitmap = CheckSizeOrNull(mainBitmap, width, height, out newImage);
+
+            if (newImage)
+            {
+                UiThreadRunAsync(() => image.Source = mainBitmap);
+            }
+
             return mainBitmap;
         }
 
         private WriteableBitmap popupBitmap = null;
         public WriteableBitmap GetPopupImage(int width, int height)
         {
-            popupBitmap = CheckSizeOrNull(popupBitmap, width, height);
+            bool newImage;
+            popupBitmap = CheckSizeOrNull(popupBitmap, width, height, out newImage);
+
+            if (newImage)
+            {
+                UiThreadRunAsync(() => popupImage.Source = popupBitmap);
+            }
+
             return popupBitmap;
         }
     }

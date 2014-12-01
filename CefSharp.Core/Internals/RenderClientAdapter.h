@@ -160,6 +160,7 @@ namespace CefSharp
 				const void* buffer, int width, int height)
 			{
 				//TODO: Implement
+				//bitmap->WritePixels(null, null, bitmap->BackBufferStride, 0);
 			}
 
             void SetBuffer(BitmapInfo^ bitmapInfo, int newWidth, int newHeight, const void* buffer)
